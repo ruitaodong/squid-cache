@@ -1,0 +1,48 @@
+services:
+  squid:
+    # Prebuilt image from GHCR (use the git tag you published);
+    # `build: .` is used if you run `docker compose build`
+    image: ghcr.io/ruitaodong/squid-cache:v1.0.0
+    build: .
+    container_name: squid-cache
+    restart: unless-stopped
+    ports:
+      - "3128:3128"
+    volumes:
+      # Optional overrides of the config baked into the image
+      - ./squid.conf:/etc/squid/squid.conf:ro
+      - ./storeid.rules:/etc/squid/storeid.rules:ro
+      - squid-ca:/etc/squid/ssl          # CA cert + private key (keep private)
+      - squid-ssldb:/var/lib/squid       # generated host certificates
+      - squid-cache:/var/spool/squid     # the cache itself (size set in squid.conf)
+      - squid-logs:/var/log/squid
+      - ./ca:/export                     # public CA cert is copied here for clients
+    environment:
+      SQUID_CA_CN: "Dev Squid Cache CA"
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+
+  # Smoke test: `docker compose --profile test run --rm pip-test` (run twice,
+  # then look for TCP_HIT / TCP_MEM_HIT in /var/log/squid/access.log)
+  pip-test:
+    image: python:3.12-slim
+    profiles: ["test"]
+    depends_on:
+      squid:
+        condition: service_healthy
+    volumes:
+      - ./ca:/ca:ro
+    environment:
+      HTTP_PROXY: http://squid:3128
+      HTTPS_PROXY: http://squid:3128
+      PIP_CERT: /ca/squid-ca.pem
+      PIP_NO_CACHE_DIR: "1"
+    command: pip download --no-deps --dest /tmp/dl requests numpy
+
+volumes:
+  squid-ca:
+  squid-ssldb:
+  squid-cache:
+  squid-logs:

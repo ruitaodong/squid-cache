@@ -1,0 +1,7 @@
+.git
+.github
+ca
+*.md
+docker-compose.yml
+client-setup.sh
+setup-squid.sh
